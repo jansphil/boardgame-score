@@ -14,31 +14,34 @@
   let editingName = '';
   let renameInput: HTMLInputElement | null = null;
 
-  // per-player "add amount" (string so the input feels natural)
-  const addAmounts: Record<string, string> = {};
+  let addAmounts: Record<string, string> = {};
+  let totals: Record<string, number> = {};
 
-  onMount(load);
+  $: {
+    const next: Record<string, number> = {};
+    for (const e of scoreEvents) {
+      next[e.playerId] = (next[e.playerId] ?? 0) + e.delta;
+    }
+    totals = next;
+  }
 
-  async function load() {
+  onMount(async () => {
     players = await db.players.orderBy('createdAt').toArray();
     scoreEvents = await db.scoreEvents.toArray();
-
-    // ensure every player has a default add amount
-    for (const p of players) {
-      if (addAmounts[p.id] === undefined) addAmounts[p.id] = '1';
-    }
-  }
+    addAmounts = Object.fromEntries(players.map((p) => [p.id, '']));
+  });
 
   async function addPlayer() {
     const name = newPlayerName.trim();
     if (!name) return;
-
     const id = crypto.randomUUID();
-    await db.players.add({ id, name, createdAt: Date.now() });
+    const player = { id, name, createdAt: Date.now() };
+    players = [...players, player];
+
+    await db.players.add(player);
 
     newPlayerName = '';
-    addAmounts[id] = '1';
-    await load();
+    addAmounts = { ...addAmounts, [id]: '' };
   }
 
   function totalFor(playerId: string) {
@@ -48,13 +51,18 @@
   }
 
   async function addScore(playerId: string, delta: number) {
-    await db.scoreEvents.add({
+    const event = {
       id: crypto.randomUUID(),
       playerId,
       delta,
       createdAt: Date.now(),
-    });
-    await load();
+    };
+
+    // Update UI immediately
+    scoreEvents = [...scoreEvents, event];
+
+    // Persist
+    await db.scoreEvents.add(event);
   }
 
   function parseAmount(raw: string): number | null {
@@ -72,9 +80,7 @@
     if (value === null) return;
 
     await addScore(playerId, value);
-
-    // reset to 1 for rapid entry (common boardgame scoring flow)
-    addAmounts[playerId] = '1';
+    addAmounts = { ...addAmounts, [playerId]: '' };
   }
 
   async function startRename(player: Player) {
@@ -95,26 +101,21 @@
     const name = editingName.trim();
     if (!name) return;
 
+    players = players.map((p) => (p.id === playerId ? { ...p, name } : p));
+
     await db.players.update(playerId, { name });
+
     cancelRename();
-    await load();
   }
 
   async function removePlayer(playerId: string) {
-    const player = players.find((p) => p.id === playerId);
-    const ok = confirm(
-      `Remove ${player?.name ?? 'this player'}? This will also delete their scores.`,
-    );
-    if (!ok) return;
+    players = players.filter((p) => p.id !== playerId);
+    scoreEvents = scoreEvents.filter((e) => e.playerId !== playerId);
 
     await db.transaction('rw', db.players, db.scoreEvents, async () => {
       await db.scoreEvents.where('playerId').equals(playerId).delete();
       await db.players.delete(playerId);
     });
-
-    delete addAmounts[playerId];
-    if (editingPlayerId === playerId) cancelRename();
-    await load();
   }
 </script>
 
@@ -201,7 +202,7 @@
             <!-- RIGHT: score + quick add -->
             <div class="flex flex-col items-end gap-2">
               <div class="text-lg font-semibold tabular-nums">
-                {totalFor(player.id)}
+                {totals[player.id] ?? 0}
               </div>
 
               <div class="flex items-center gap-2">
