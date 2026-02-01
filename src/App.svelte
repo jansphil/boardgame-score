@@ -22,10 +22,12 @@
   let editingPlayerId: string | null = null;
   let editingName = '';
   let renameInput: HTMLInputElement | null = null;
+  let activeEditPill: HTMLDivElement | null = null;
 
   // add points state
   let addingPlayerId: string | null = null;
   let addInput: HTMLInputElement | null = null;
+  let activeAddPill: HTMLDivElement | null = null;
 
   let addAmounts: Record<string, string> = {};
   let totals: Record<string, number> = {};
@@ -71,6 +73,25 @@
         updatedAt: now,
       });
     }
+
+    const handlePointerDown = (event: PointerEvent) => {
+      const target = event.target as Node | null;
+      if (editingPlayerId && activeEditPill) {
+        if (!target || !activeEditPill.contains(target)) {
+          cancelRename();
+        }
+      }
+      if (addingPlayerId && activeAddPill) {
+        if (!target || !activeAddPill.contains(target)) {
+          addingPlayerId = null;
+        }
+      }
+    };
+
+    document.addEventListener('pointerdown', handlePointerDown);
+    return () => {
+      document.removeEventListener('pointerdown', handlePointerDown);
+    };
   });
 
   async function addPlayer() {
@@ -152,19 +173,6 @@
     await tick();
     addInput?.focus();
     addInput?.select();
-  }
-
-  function handlePillFocusOut(
-    event: FocusEvent,
-    onOutside: () => void
-  ) {
-    const currentTarget = event.currentTarget as HTMLElement;
-    queueMicrotask(() => {
-      const active = document.activeElement;
-      if (!active || !currentTarget.contains(active)) {
-        onOutside();
-      }
-    });
   }
 
   function openRename(player: Player) {
@@ -308,7 +316,7 @@
           {#if editingPlayerId === player.id}
             <div
               class={pillClass}
-              on:focusout={(event) => handlePillFocusOut(event, cancelRename)}
+              bind:this={activeEditPill}
             >
               <input
                 class={pillInputClass}
@@ -340,10 +348,7 @@
           {:else if scoringMode === 'simple' && addingPlayerId === player.id}
             <div
               class={pillClass}
-              on:focusout={(event) =>
-                handlePillFocusOut(event, () => {
-                  addingPlayerId = null;
-                })}
+              bind:this={activeAddPill}
             >
               <button
                 type="button"
