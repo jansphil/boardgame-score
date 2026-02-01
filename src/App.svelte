@@ -30,6 +30,20 @@
   let addAmounts: Record<string, string> = {};
   let totals: Record<string, number> = {};
 
+  const pillClass =
+    'flex w-full items-center gap-2 rounded-full border border-gray-200 bg-white pl-4 pr-2 py-2 shadow-sm';
+  const pillInputClass =
+    'w-full bg-transparent text-lg font-medium outline-none';
+  const pillNameButtonClass =
+    'min-w-0 flex-1 truncate text-left text-lg font-medium';
+  const iconClass = 'material-symbols-rounded text-[20px] leading-none';
+  const circleButtonBase =
+    'flex h-9 w-9 shrink-0 items-center justify-center rounded-full';
+  const circleButtonPrimary = `${circleButtonBase} bg-blue-600 text-white`;
+  const circleButtonSuccess = `${circleButtonBase} bg-green-600 text-white`;
+  const circleButtonDanger =
+    `${circleButtonBase} border border-red-100 bg-red-50 text-red-500 hover:bg-red-100`;
+
   $: {
     const next: Record<string, number> = {};
     for (const e of scoreEvents) {
@@ -116,13 +130,6 @@
     renameInput?.select();
   }
 
-  function handleRenameFocusOut(event: FocusEvent) {
-    const nextTarget = event.relatedTarget as Node | null;
-    if (!event.currentTarget.contains(nextTarget)) {
-      cancelRename();
-    }
-  }
-
   function cancelRename() {
     editingPlayerId = null;
     editingName = '';
@@ -147,13 +154,26 @@
     addInput?.select();
   }
 
-  function handleAddFocusOut(event: FocusEvent) {
-    const nextTarget = event.relatedTarget as Node | null;
-    if (!event.currentTarget.contains(nextTarget)) {
-      addingPlayerId = null;
-    }
+  function handlePillFocusOut(
+    event: FocusEvent,
+    onOutside: () => void
+  ) {
+    const currentTarget = event.currentTarget as HTMLElement;
+    queueMicrotask(() => {
+      const active = document.activeElement;
+      if (!active || !currentTarget.contains(active)) {
+        onOutside();
+      }
+    });
   }
 
+  function openRename(player: Player) {
+    startRename(player);
+  }
+
+  function openAddPoints(playerId: string) {
+    startAddPoints(playerId);
+  }
 
   async function removePlayer(playerId: string) {
     players = players.filter((p) => p.id !== playerId);
@@ -287,11 +307,11 @@
         <li class="p-0">
           {#if editingPlayerId === player.id}
             <div
-              class="flex w-full items-center gap-2 rounded-full border border-gray-200 bg-white pl-4 pr-2 py-2 shadow-sm"
-              on:focusout={handleRenameFocusOut}
+              class={pillClass}
+              on:focusout={(event) => handlePillFocusOut(event, cancelRename)}
             >
               <input
-                class="w-full bg-transparent text-lg font-medium outline-none"
+                class={pillInputClass}
                 bind:this={renameInput}
                 bind:value={editingName}
                 on:keydown={(e) => {
@@ -301,35 +321,34 @@
               />
               <button
                 type="button"
-                class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-green-600 text-white"
+                class={circleButtonSuccess}
                 on:click={() => saveRename(player.id)}
                 aria-label="Save name"
               >
-                <span class="material-symbols-rounded text-[20px] leading-none">
-                  check
-                </span>
+                <span class={iconClass}>check</span>
               </button>
               <button
                 type="button"
-                class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-red-100 bg-red-50 text-red-500 hover:bg-red-100"
+                class={circleButtonDanger}
                 on:click={() => removePlayer(player.id)}
                 aria-label="Remove player"
                 title="Remove"
               >
-                <span class="material-symbols-rounded text-[20px] leading-none">
-                  delete
-                </span>
+                <span class={iconClass}>delete</span>
               </button>
             </div>
           {:else if scoringMode === 'simple' && addingPlayerId === player.id}
             <div
-              class="flex w-full items-center gap-2 rounded-full border border-gray-200 bg-white pl-4 pr-2 py-2 shadow-sm"
-              on:focusout={handleAddFocusOut}
+              class={pillClass}
+              on:focusout={(event) =>
+                handlePillFocusOut(event, () => {
+                  addingPlayerId = null;
+                })}
             >
               <button
                 type="button"
-                class="min-w-0 flex-1 truncate text-left text-lg font-medium"
-                on:click={() => startRename(player)}
+                class={pillNameButtonClass}
+                on:click={() => openRename(player)}
                 aria-label="Edit player name"
                 title="Edit name"
               >
@@ -348,21 +367,19 @@
               />
               <button
                 type="button"
-                class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-blue-600 text-white"
+                class={circleButtonPrimary}
                 on:click={() => submitAdd(player.id)}
                 aria-label="Add points"
               >
-                <span class="material-symbols-rounded text-[20px] leading-none">
-                  add
-                </span>
+                <span class={iconClass}>add</span>
               </button>
             </div>
           {:else}
-            <div class="flex w-full items-center gap-2 rounded-full border border-gray-200 bg-white pl-4 pr-2 py-2 shadow-sm">
+            <div class={pillClass}>
               <button
                 type="button"
-                class="min-w-0 flex-1 truncate text-left text-lg font-medium"
-                on:click={() => startRename(player)}
+                class={pillNameButtonClass}
+                on:click={() => openRename(player)}
                 aria-label="Edit player name"
                 title="Edit name"
               >
@@ -372,20 +389,18 @@
                 <button
                   type="button"
                   class="text-lg font-semibold tabular-nums hover:text-blue-700"
-                  on:click={() => startAddPoints(player.id)}
+                  on:click={() => openAddPoints(player.id)}
                   aria-label="Edit score"
                 >
                   {totals[player.id] ?? 0}
                 </button>
                 <button
                   type="button"
-                  class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-blue-600 text-white"
-                  on:click={() => startAddPoints(player.id)}
+                  class={circleButtonPrimary}
+                  on:click={() => openAddPoints(player.id)}
                   aria-label="Open add points"
                 >
-                  <span class="material-symbols-rounded text-[20px] leading-none">
-                    add
-                  </span>
+                  <span class={iconClass}>add</span>
                 </button>
               {/if}
             </div>
@@ -397,20 +412,18 @@
         <li class="p-0">
           <div class="flex w-full items-center gap-2 rounded-full border border-dashed border-gray-200 bg-white pl-4 pr-2 py-2 shadow-sm">
             <input
-              class="w-full bg-transparent text-lg font-medium outline-none"
+              class={pillInputClass}
               placeholder="Add player"
               bind:value={newPlayerName}
               on:keydown={(e) => e.key === 'Enter' && addPlayer()}
             />
             <button
               type="button"
-              class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-blue-600 text-white"
+              class={circleButtonPrimary}
               on:click={addPlayer}
               aria-label="Add player"
             >
-              <span class="material-symbols-rounded text-[20px] leading-none">
-                add
-              </span>
+              <span class={iconClass}>add</span>
             </button>
           </div>
         </li>
